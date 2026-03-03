@@ -1,4 +1,4 @@
-// Most of this code is from https://github.com/SebLague/Terraforming
+// Most of this code is based on https://github.com/SebLague/Terraforming
 // with a hint of https://github.com/qhdwight/voxel-game-rs
 
 struct MeshSettings {
@@ -143,7 +143,7 @@ fn main(
 			cube_configuration |= 1u << u32(i);
 		}
 	}
-	
+
 	// Get array of the edges of the cube that the surface passes through.
 	var edge_indices = TRIANGULATION[cube_configuration];
 

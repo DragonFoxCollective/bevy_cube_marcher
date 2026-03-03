@@ -1,3 +1,23 @@
+//! A shader-based marching cubes implementation for Bevy.
+//!
+//! To get started, add the [`MarchingCubesPlugin`] to your app.
+//!
+//! The plugin takes a type argument similar to a Bevy material, [`ChunkComputeShader`].
+//! The [`ShaderRef`] provided by this type is a wgsl compute shader that takes a coordinate and returns the density of the chunk's mass at that point,
+//! generally with positive values representing being inside the mass and negative values being in air,
+//! although the threshold can be configured with [`ChunkGeneratorSettings`].
+//! See [this example asset](https://github.com/DragonFoxCollective/bevy_cube_marcher/blob/main/assets/sample.wgsl) for more details.
+//!
+//! The plugin also takes a type argument implementing [`GpuExtraBufferCache`], defining additional buffers to be used in the density sampler.
+//! [This example](https://github.com/DragonFoxCollective/bevy_cube_marcher/blob/main/examples/noise_with_extra_buffers.rs)
+//! uses this to determine the final position of a Point Of Interest based on terrain generation.
+//!
+//! [`ChunkGeneratorSettings`] must be inserted.
+//!
+//! [`ChunkMaterial`] must be inserted.
+//!
+//! An entity must also be given [`ChunkLoader`] to start generating any chunks.
+
 use std::num::NonZero;
 
 use bevy::asset::{RenderAssetUsages, embedded_asset, load_embedded_asset};
@@ -22,9 +42,10 @@ use bevy::render::render_resource::{
 use bevy::render::renderer::{RenderContext, RenderDevice, RenderQueue};
 use bevy::render::storage::{GpuShaderStorageBuffer, ShaderStorageBuffer};
 use bevy::render::{MainWorld, Render, RenderApp, RenderStartup, RenderSystems};
-use bevy::shader::ShaderRef;
+pub use bevy::shader::ShaderRef;
 use encase::internal::WriteInto;
 
+/// Resources shared across all instances
 struct MarchingCubesGlobalPlugin;
 
 impl Plugin for MarchingCubesGlobalPlugin {
@@ -43,6 +64,11 @@ impl Plugin for MarchingCubesGlobalPlugin {
     }
 }
 
+/// The plugin. Add this to your app or the crate won't work!
+///
+/// - `Sampler` implements [`ChunkComputeShader`].
+/// - `ExtraBufferCache` implements [`GpuExtraBufferCache`]. May be `()`.
+/// - `Material` is a bevy [`Material`] that will be applied to the chunks.
 pub struct MarchingCubesPlugin<Sampler, ExtraBufferCache, Material> {
     _marker: std::marker::PhantomData<(Sampler, ExtraBufferCache, Material)>,
 }
@@ -130,6 +156,7 @@ impl<
     }
 }
 
+/// [`SystemSet`] for chunk generation systems.
 #[derive(SystemSet, Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub struct ChunkGenSystems;
 
@@ -311,10 +338,14 @@ fn init_compute_pipelines<
     Ok(())
 }
 
+/// Reference to the shader used for sampling the density field.
 pub trait ChunkComputeShader {
     fn shader() -> ShaderRef;
 }
 
+/// Marker component for each chunk.
+///
+/// The entity this is on should also have the appropriate mesh, material, and transform.
 #[derive(Component, Debug)]
 pub struct Chunk<Sampler> {
     pub position: IVec3,
@@ -327,6 +358,7 @@ struct ChunkGenData {
     triangles: Option<Vec<Triangle>>,
 }
 
+/// Holds the buffers for a chunk being generated.
 #[derive(Component, ExtractComponent, Debug)]
 pub struct ChunkRenderData<Sampler: Send + Sync + 'static> {
     position: IVec3,
@@ -355,6 +387,7 @@ impl<Sampler: Send + Sync + 'static> Clone for ChunkRenderData<Sampler> {
 #[derive(Component, Debug, Default)]
 struct ChunkThisFrame;
 
+/// Loads nearby chunks.
 #[derive(Component, Default, Debug)]
 pub struct ChunkLoader<T> {
     pub position: IVec3,
@@ -372,6 +405,7 @@ impl<T> ChunkLoader<T> {
     }
 }
 
+/// Holds the actual material chunks should be spawned with.
 #[derive(Resource, Debug)]
 pub struct ChunkMaterial<Sampler, Material: Asset> {
     pub material: Handle<Material>,
@@ -400,6 +434,7 @@ pub enum ChunkGeneratorRunning {
     Reset,
 }
 
+/// Settings for a chunk generator. Also controls whether said generator is running.
 #[derive(Resource, ExtractResource, Debug)]
 pub struct ChunkGeneratorSettings<Sampler: Send + Sync + 'static> {
     pub running: ChunkGeneratorRunning,
@@ -526,12 +561,14 @@ impl<Sampler: Send + Sync + 'static> ChunkGeneratorSettings<Sampler> {
     }
 }
 
+/// Run condition for whether a chunk generator is running and listening to [`ChunkLoader`]s, regardless of whether it's actually generating anything.
 pub fn is_generator_running<Sampler: Send + Sync + 'static>(
     settings: Res<ChunkGeneratorSettings<Sampler>>,
 ) -> bool {
     matches!(settings.running, ChunkGeneratorRunning::Run)
 }
 
+/// Holds the loading states of all the chunks.
 #[derive(Resource, Debug, Clone)]
 pub struct ChunkGeneratorCache<Sampler> {
     loaded_chunks: HashMap<IVec3, LoadState>,
@@ -645,12 +682,14 @@ impl<Sampler: Send + Sync + 'static> ChunkGeneratorCache<Sampler> {
     }
 }
 
+/// Whether a chunk is loading or has finished loading.
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum LoadState {
     Loading,
     Finished,
 }
 
+/// Holds the main vertex/triangles buffers. May be hashed and used as an identifying key for a loading chunk.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BufferCache {
     vertices: Handle<ShaderStorageBuffer>,
@@ -702,6 +741,7 @@ enum BufferCacheAvailable {
     Unavailable,
 }
 
+/// Defines extra buffers to be used in the density sampler.
 pub trait GpuExtraBufferCache {
     fn define_extra_buffers() -> Vec<BindGroupLayoutEntryBuilder>;
     fn create_extra_buffers() -> ScheduleConfigs<ScheduleSystem>;
@@ -729,6 +769,7 @@ impl GpuExtraBufferCache for () {
     }
 }
 
+/// Holds extra buffers to be used when sampling the density field.
 #[derive(Resource, Debug, Clone)]
 pub struct GpuChunkGeneratorCache<Sampler, ExtraBufferCache> {
     buffer_cache: HashMap<BufferCache, GpuBufferCache>,
@@ -866,6 +907,7 @@ impl GpuBufferCache {
     }
 }
 
+/// Event meaning any extra buffers should be cleared entirely to prevent memory leaks, like when the chunk generator is destroyed.
 #[derive(Event)]
 pub struct ClearBufferCache<Sampler>(std::marker::PhantomData<Sampler>);
 
@@ -1212,12 +1254,15 @@ fn prepare_bind_groups<
     Ok(())
 }
 
+/// Converts a [`ShaderType`] into [`Vec<u8>`] data.
 pub fn value_data<T: ShaderType + WriteInto>(value: &T) -> Result<Vec<u8>> {
     let mut writer = encase::StorageBuffer::<Vec<u8>>::new(Vec::new());
     writer.write(value)?;
     Ok(writer.into_inner())
 }
 
+/// Event that needs to be sent when an extra buffer has been finished reading from.
+/// Otherwise, the chunk will never finish generating.
 #[derive(EntityEvent)]
 pub struct ReadbackReallyComplete(pub Entity);
 

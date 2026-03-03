@@ -1,3 +1,18 @@
-# bevy_marching_cubes
+# bevy_cube_marcher
 
-A marching cubes implementation for Bevy.
+[![Crates.io](https://img.shields.io/crates/v/bevy_cube_marcher)](https://crates.io/crates/bevy_cube_marcher)
+[![Docs](https://docs.rs/bevy_cube_marcher/badge.svg)](https://docs.rs/bevy_cube_marcher)
+
+A shader-based marching cubes implementation for Bevy.
+
+## Getting started
+
+Check the [docs](https://docs.rs/bevy_cube_marcher),
+[examples](https://github.com/DragonFoxCollective/bevy_cube_marcher/tree/main/examples),
+and [example assets](https://github.com/DragonFoxCollective/bevy_cube_marcher/tree/main/assets)!
+
+## Bevy compatibility
+
+| bevy  | bevy_cube_marcher |
+|-------|-------------------|
+| 0.18  | 0.4               |
