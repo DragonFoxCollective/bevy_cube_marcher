@@ -1,8 +1,8 @@
 [package]
 name = "bevy_cube_marcher"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2024"
-description = "A refreshingly complex input crate for Bevy"
+description = "A shader-based marching cubes implementation for Bevy"
 repository = "https://github.com/DragonFoxCollective/bevy_cube_marcher"
 license = "MIT OR Apache-2.0"
 keywords = ["bevy", "chunk", "generation", "marching_cubes", "terrain"]
