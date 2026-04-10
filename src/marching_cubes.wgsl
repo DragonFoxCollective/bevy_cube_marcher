@@ -149,7 +149,7 @@ fn main(
 
 	// Create vertices for the edges that the surface passes through.
 	var edge_vertices = array<Vertex, 12>();
-	var edge_vertices_created = array<bool, 12>();
+	var edge_to_vertex = array<i32, 12>(-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1);
 	var num_vertices = 0u;
 	var num_vertices_for_triangles = 0u;
 	for (var i = 0; i < 15; i++) {
@@ -159,28 +159,24 @@ fn main(
 		num_vertices_for_triangles += 1;
 
 		// If the edge has already been created, skip it.
-		if edge_vertices_created[edge_index] { continue; }
+		if edge_to_vertex[edge_index] != -1 { continue; }
 		num_vertices += 1;
 
 		// Get indices of the two corner points defining the edge that the surface passes through.
 		let coord_a = vec3<i32>(coord) + CORNER_COORDS[CORNER_INDEX_A_FROM_EDGE[edge_index]];
 		let coord_b = vec3<i32>(coord) + CORNER_COORDS[CORNER_INDEX_B_FROM_EDGE[edge_index]];
 		edge_vertices[edge_index] = create_vertex(coord_a, coord_b);
-		edge_vertices_created[edge_index] = true;
+		edge_to_vertex[edge_index] = i32(num_vertices - 1u);
 	}
 
 	// Map the vertices and their indices to the output buffer.
 	var current_vertex_index = atomicAdd(&out_num_vertices, num_vertices);
 	for (var i = 0; i < 12; i++) {
 		// If the edge has not been created, skip it.
-		if !edge_vertices_created[i] { continue; }
+		if edge_to_vertex[i] == -1 { continue; }
 
 		out_vertices[current_vertex_index] = edge_vertices[i];
-		for (var j = 0; j < 15; j++) {
-			if edge_indices[j] == i {
-				edge_indices[j] = i32(current_vertex_index);
-			}
-		}
+		edge_to_vertex[i] = i32(current_vertex_index);
 		current_vertex_index += 1;
 	}
 
@@ -192,9 +188,9 @@ fn main(
 
 		// Create triangle
 		out_triangles[current_triangle_index] = Triangle(
-			u32(edge_indices[i]),
-			u32(edge_indices[i + 1]),
-			u32(edge_indices[i + 2]),
+			u32(edge_to_vertex[edge_indices[i]]),
+			u32(edge_to_vertex[edge_indices[i + 1]]),
+			u32(edge_to_vertex[edge_indices[i + 2]]),
 		);
 		current_triangle_index += 1;
 	}
